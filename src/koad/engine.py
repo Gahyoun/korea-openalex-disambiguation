@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from . import __version__
-from .model import Decision, Work, anonymized_token, centroid, cosine, stable_json, tfidf_vectors
+from .model import (
+    Decision, Work, anonymized_token, centroid, cosine, semantic_families_for_work,
+    stable_json, tfidf_vectors,
+)
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -65,7 +68,25 @@ def _department_compatible(subject: str, unit_labels: set[str]) -> bool | None:
             "zoolog", "agricultur", "medicine", "pharmacy", "생명", "생물", "의학",
         ),
     }
-    return any(pattern in labels for pattern in patterns.get(subject, ()))
+    if any(pattern in labels for pattern in patterns.get(subject, ())):
+        return True
+    explicit_conflicts = (
+        "accounting", "architecture", "business", "civil engineering",
+        "construction", "economics", "education", "electrical engineering",
+        "law", "mechanical engineering", "nursing", "경영", "건설", "건축",
+        "경제", "교육", "기계공", "법학", "토목",
+    )
+    if any(pattern in labels for pattern in explicit_conflicts):
+        return False
+    return None
+
+
+def _obvious_title_conflict(title: str | None, config: dict[str, Any]) -> bool:
+    normalized = (title or "").casefold()
+    return any(
+        phrase.casefold() in normalized
+        for phrase in config.get("obvious_unrelated_title_phrases", [])
+    )
 
 
 def choose_seeds(
@@ -145,6 +166,14 @@ def graph_reachable(
         if work.topic_id:
             topic_index[work.topic_id].append(index)
     topic_index = {key: value for key, value in topic_index.items() if 1 < len(value) <= maximum}
+    work_families = [semantic_families_for_work(work, config) for work in works]
+    family_index: dict[str, list[int]] = defaultdict(list)
+    for index, families in enumerate(work_families):
+        for family_name in families:
+            family_index[family_name].append(index)
+    family_index = {
+        key: value for key, value in family_index.items() if 1 < len(value) <= maximum
+    }
 
     reached = set(seeds)
     queue = deque(seeds)
@@ -158,6 +187,8 @@ def graph_reachable(
             neighbors.update(institution_index.get(value, ()))
         if work.topic_id:
             neighbors.update(topic_index.get(work.topic_id, ()))
+        for family_name in work_families[current]:
+            neighbors.update(family_index.get(family_name, ()))
         for other in neighbors - reached:
             candidate = works[other]
             shared_coauthor = bool(work.coauthors & candidate.coauthors)
@@ -192,7 +223,12 @@ def graph_reachable(
                 year_gap <= int(config["graph_max_topic_year_gap"])
                 and similarity >= float(config["near_duplicate_similarity"])
             )
-            if shared_coauthor or shared_institution or topic_edge or duplicate_edge:
+            semantic_edge = (
+                bool(work_families[current] & work_families[other])
+                and year_gap <= int(config["graph_max_semantic_year_gap"])
+                and similarity >= float(config["graph_semantic_similarity"])
+            )
+            if shared_coauthor or shared_institution or topic_edge or semantic_edge or duplicate_edge:
                 reached.add(other)
                 queue.append(other)
     return reached
@@ -218,13 +254,16 @@ def classify_professor(
             "paper_count": 0, "true_paper_count": 0, "namesake_paper_count": 0,
             "auto_drop_count": 0, "review_count": 0, "confidence_counts": {},
         }
-    vectors = tfidf_vectors(works)
+    vectors = tfidf_vectors(works, config)
     seeds, debut_year, doctoral_start, seed_source = choose_seeds(
         works, vectors, professor["subject"], professor["phd_year"], phd_unit, config
     )
     root_centroid = centroid(vectors[index] for index in seeds)
     reached = graph_reachable(works, vectors, seeds, professor["subject"], config)
     core_coauthors = set().union(*(works[index].coauthors for index in seeds)) if seeds else set()
+    root_families = set().union(*(
+        semantic_families_for_work(works[index], config) for index in seeds
+    )) if seeds else set()
     known_institutions = set(career_units)
     if phd_unit:
         known_institutions.add(phd_unit)
@@ -247,7 +286,12 @@ def classify_professor(
             )
         )
         topic_similarity = cosine(vectors[index], root_centroid) if root_centroid else 0.0
-        topic_connected = topic_similarity >= float(config["topic_similarity_keep"])
+        semantic_families = semantic_families_for_work(work, config)
+        semantic_bridge_connected = bool(semantic_families & root_families)
+        topic_connected = (
+            topic_similarity >= float(config["topic_similarity_keep"])
+            or semantic_bridge_connected
+        )
         topic_far = topic_similarity < float(config["topic_similarity_far"])
         path_connected = index in reached
         orcid_exact = bool(work.anchor_flags.get("orcid_exact"))
@@ -273,7 +317,7 @@ def classify_professor(
         verified_seed = seed_source == "doctoral_institution"
         strong_field_conflict = department_compatible is False or (
             department_compatible is None and not field_compatible
-        )
+        ) or _obvious_title_conflict(work.title, config)
         reasons: list[str] = []
         score = 0
         if is_seed:
@@ -296,6 +340,8 @@ def classify_professor(
             score -= 3; reasons.append("topic_embedding_far:-3")
         else:
             reasons.append("topic_embedding_borderline:0")
+        if semantic_bridge_connected:
+            reasons.append("semantic_family_bridge")
         if path_connected:
             score += 3; reasons.append("verified_cluster_path:+3")
         else:
@@ -357,6 +403,8 @@ def classify_professor(
             institution_connected=institution_connected,
             department_compatible=department_compatible,
             topic_similarity=round(topic_similarity, 6),
+            semantic_families=sorted(semantic_families),
+            semantic_bridge_connected=semantic_bridge_connected,
             graph_path_connected=path_connected,
             orcid_exact=orcid_exact,
             orcid_only=orcid_only,
@@ -421,6 +469,7 @@ class OutputWriter:
             is_seed INTEGER NOT NULL,core_coauthor_connected INTEGER NOT NULL,
             institution_connected INTEGER NOT NULL,topic_similarity REAL NOT NULL,
             department_compatible INTEGER,
+            semantic_families_json TEXT NOT NULL,semantic_bridge_connected INTEGER NOT NULL,
             graph_path_connected INTEGER NOT NULL,orcid_exact INTEGER NOT NULL,
             orcid_only INTEGER NOT NULL,prior_decision TEXT NOT NULL,reasons_json TEXT NOT NULL,
             PRIMARY KEY(professor_uid,work_id)
@@ -456,7 +505,7 @@ class OutputWriter:
             if decision.recommended_action == "review":
                 self.streams["review"].write(line)
             self.database.execute(
-                """INSERT INTO work_decision VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                """INSERT INTO work_decision VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     decision.professor_uid, decision.professor_token, decision.work_id,
                     decision.publication_year, decision.publication_date, decision.title,
@@ -466,6 +515,8 @@ class OutputWriter:
                     int(decision.core_coauthor_connected), int(decision.institution_connected),
                     decision.topic_similarity,
                     None if decision.department_compatible is None else int(decision.department_compatible),
+                    stable_json(decision.semantic_families),
+                    int(decision.semantic_bridge_connected),
                     int(decision.graph_path_connected),
                     int(decision.orcid_exact), int(decision.orcid_only), decision.prior_decision,
                     stable_json(decision.reasons),

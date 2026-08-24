@@ -13,9 +13,22 @@ CONFIG = {
     "graph_topic_similarity": 0.30,
     "near_duplicate_similarity": 0.72,
     "graph_max_topic_year_gap": 4,
+    "graph_max_semantic_year_gap": 6,
+    "graph_semantic_similarity": 0.08,
     "max_shared_entity_component": 80,
     "auto_drop_confidence": ["high"],
     "auto_keep_confidence": ["high", "medium"],
+    "obvious_unrelated_title_phrases": ["construction site", "supreme court"],
+    "semantic_families": {
+        "network_science": {
+            "primary": ["network", "graph"],
+            "context": ["community", "complex", "core", "fungal", "mesoscale", "mutualistic", "periphery", "sample", "statistical"],
+        },
+        "mathematical_biology": {
+            "primary": ["ecosystem", "fungal", "mutualistic", "population"],
+            "context": ["dynamics", "model", "network"],
+        },
+    },
     "subject_fields": {
         "physics": ["physics and astronomy", "mathematics", "computer science"],
     },
@@ -76,6 +89,15 @@ class IdentityClassifierTests(unittest.TestCase):
         self.assertEqual(decisions["mechanical"].decision, "namesake_paper")
         self.assertEqual(decisions["mechanical"].recommended_action, "drop")
 
+    def test_unlinked_construction_site_work_is_dropped(self):
+        construction = work(
+            "construction", 2016,
+            "Fast 3D terrain reconstruction of a construction site using stereo cameras",
+            "Engineering", topic_id="terrain", topic_name="3D reconstruction",
+        )
+        decisions, _ = self.classify([self.seed(), construction])
+        self.assertEqual(decisions["construction"].recommended_action, "drop")
+
     def test_interdisciplinary_network_work_survives_with_coauthor_path(self):
         network = work(
             "network", 2012, "Community detection in complex social networks",
@@ -85,6 +107,21 @@ class IdentityClassifierTests(unittest.TestCase):
         decisions, _ = self.classify([self.seed(), network])
         self.assertEqual(decisions["network"].decision, "true_paper")
         self.assertEqual(decisions["network"].recommended_action, "keep")
+
+    def test_mutualistic_network_is_connected_by_semantic_bridge(self):
+        bridge = work(
+            "bridge", 2010, "Mesoscale analyses of fungal networks",
+            "Biological Sciences", topic_id="fungal", topic_name="Fungal networks",
+            institutions={"other"}, units={"Institute for Complex Systems"},
+        )
+        ecosystem = work(
+            "ecosystem", 2016, "Core-periphery structure in mutualistic networks",
+            "Biological Sciences", topic_id="ecosystem", topic_name="Mutualistic ecosystems",
+            units={"Department of Ecology"},
+        )
+        decisions, _ = self.classify([self.seed(), bridge, ecosystem])
+        self.assertTrue(decisions["ecosystem"].semantic_bridge_connected)
+        self.assertEqual(decisions["ecosystem"].recommended_action, "keep")
 
     def test_orcid_alone_does_not_rescue_unrelated_law_paper(self):
         law = work(

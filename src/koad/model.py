@@ -25,7 +25,24 @@ def anonymized_token(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
 
 
-def tokens_for_work(work: "Work") -> list[str]:
+def semantic_families_for_work(work: "Work", config: dict[str, Any] | None) -> set[str]:
+    if not config:
+        return set()
+    text = " ".join(filter(None, (
+        work.title, work.topic_name, work.subfield_name, work.field_name, work.domain_name,
+    )))
+    values = {token.casefold() for token in TOKEN_RE.findall(text)}
+
+    def has_stem(stems: list[str]) -> bool:
+        return any(token.startswith(stem.casefold()) for token in values for stem in stems)
+
+    return {
+        name for name, rule in config.get("semantic_families", {}).items()
+        if has_stem(rule.get("primary", [])) and has_stem(rule.get("context", []))
+    }
+
+
+def tokens_for_work(work: "Work", config: dict[str, Any] | None = None) -> list[str]:
     title_tokens = [
         token.casefold() for token in TOKEN_RE.findall(work.title or "")
         if len(token) > 1 and token.casefold() not in STOPWORDS
@@ -43,11 +60,15 @@ def tokens_for_work(work: "Work") -> list[str]:
                 metadata.extend([f"{prefix}:{token.casefold()}"] * (3 if prefix == "topic" else 1))
     if work.topic_id:
         metadata.extend([f"topic-id:{work.topic_id}"] * 4)
+    for family_name in semantic_families_for_work(work, config):
+        metadata.extend([f"semantic-family:{family_name}"] * 5)
     return title_tokens + bigrams + metadata
 
 
-def tfidf_vectors(works: list["Work"]) -> list[dict[str, float]]:
-    documents = [tokens_for_work(work) for work in works]
+def tfidf_vectors(
+    works: list["Work"], config: dict[str, Any] | None = None
+) -> list[dict[str, float]]:
+    documents = [tokens_for_work(work, config) for work in works]
     df: Counter[str] = Counter()
     for document in documents:
         df.update(set(document))
@@ -126,6 +147,8 @@ class Decision:
     institution_connected: bool
     department_compatible: bool | None
     topic_similarity: float
+    semantic_families: list[str]
+    semantic_bridge_connected: bool
     graph_path_connected: bool
     orcid_exact: bool
     orcid_only: bool

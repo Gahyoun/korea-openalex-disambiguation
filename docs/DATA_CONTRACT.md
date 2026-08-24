@@ -18,7 +18,7 @@
 - 서지: `publication_year`, `publication_date`, `title`, `topic_name`, `field_name`, `domain_name`
 - 결과: `decision`, `confidence`, `recommended_action`, `score`
 - 기준점: `debut_year`, `is_seed`
-- 증거: `core_coauthor_connected`, `institution_connected`, `department_compatible`, `topic_similarity`, `graph_path_connected`, `orcid_exact`, `orcid_only`
+- 증거: `core_coauthor_connected`, `institution_connected`, `department_compatible`, `topic_similarity`, `semantic_families`, `semantic_bridge_connected`, `graph_path_connected`, `orcid_exact`, `orcid_only`
 - 감사: `prior_decision`, `reasons`
 
 `decision`은 `true_paper|namesake_paper`, `recommended_action`은 `keep|drop|review`입니다.
@@ -30,4 +30,3 @@
 ## 최종 overlay
 
 `final_identity_overlay.sqlite`의 `final_identity_decision`은 stage 1과 stage 2를 나란히 저장합니다. 원본 `work_authorship_evidence`와 결합할 때는 `professor_uid` 대신 공개 가능한 `professor_token` 매핑이 필요하므로, 내부 적용 파이프라인에서는 stage-1 DB의 `(professor_uid, professor_token)`을 사용해 조인합니다.
-

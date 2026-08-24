@@ -6,11 +6,31 @@
   "graph_topic_similarity": 0.30,
   "near_duplicate_similarity": 0.72,
   "graph_max_topic_year_gap": 4,
+  "graph_max_semantic_year_gap": 6,
+  "graph_semantic_similarity": 0.08,
   "max_shared_entity_component": 80,
   "orcid_alone_is_sufficient": false,
   "auto_drop_confidence": ["high"],
   "auto_keep_confidence": ["high", "medium"],
   "review_confidence": ["medium", "low"],
+  "obvious_unrelated_title_phrases": [
+    "architectural design", "construction site", "criminal response",
+    "real estate", "supreme court"
+  ],
+  "semantic_families": {
+    "network_science": {
+      "primary": ["network", "graph"],
+      "context": ["bipartite", "burst", "community", "complex", "core", "fungal", "hub", "interaction", "mesoscale", "modular", "mutualistic", "nested", "partition", "periphery", "renormal", "sample", "scale", "small", "statistical", "topolog"]
+    },
+    "mathematical_biology": {
+      "primary": ["ecolog", "ecosystem", "epidemi", "fungal", "mutualistic", "population"],
+      "context": ["dynamics", "evolution", "interaction", "model", "network", "stochastic"]
+    },
+    "discrete_networks": {
+      "primary": ["graph", "network"],
+      "context": ["algorithm", "bipartite", "combinator", "community", "discrete", "partition", "periphery", "spectral", "theorem", "topolog"]
+    }
+  },
   "subject_fields": {
     "physics": ["physics and astronomy", "mathematics", "materials science", "engineering", "earth and planetary sciences", "computer science"],
     "mathematics": ["mathematics", "computer science", "decision sciences", "physics and astronomy"],
@@ -18,4 +38,3 @@
     "biology": ["biochemistry, genetics and molecular biology", "agricultural and biological sciences", "environmental science", "medicine", "neuroscience", "immunology and microbiology", "chemistry"]
   }
 }
-

@@ -162,6 +162,8 @@ def review_payloads(database: sqlite3.Connection) -> Iterable[dict[str, Any]]:
                     None if row["department_compatible"] is None else bool(row["department_compatible"])
                 ),
                 "topic_similarity": row["topic_similarity"],
+                "semantic_families": json.loads(row["semantic_families_json"]),
+                "semantic_bridge_connected": bool(row["semantic_bridge_connected"]),
                 "graph_path_connected": bool(row["graph_path_connected"]),
                 "orcid_exact_nonabsolute": bool(row["orcid_exact"]),
                 "orcid_only": bool(row["orcid_only"]),
@@ -224,4 +226,3 @@ def adjudicate(
             written += 1
     connection.close()
     return {"provider": provider_name, "written": written, "errors": errors, "dry_run": dry_run}
-

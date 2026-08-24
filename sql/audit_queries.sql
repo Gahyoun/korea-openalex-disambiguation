@@ -21,6 +21,7 @@ ORDER BY professor_token, publication_year, work_id;
 -- Review queue for one anonymized professor
 SELECT publication_year, work_id, title, topic_name, field_name,
        topic_similarity, core_coauthor_connected, institution_connected,
+       semantic_families_json, semantic_bridge_connected,
        graph_path_connected, decision, confidence, reasons_json
 FROM work_decision
 WHERE professor_token = :professor_token
