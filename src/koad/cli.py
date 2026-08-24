@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .adjudicators import PROVIDERS, adjudicate
+from .apply import apply_to_copy
 from .engine import run_classification
 from .overlay import build_overlay
 
@@ -44,6 +45,14 @@ def main() -> None:
     overlay.add_argument("--adjudication", type=Path, action="append", default=[])
     overlay.add_argument("--output", type=Path, required=True)
 
+    apply_copy = subparsers.add_parser(
+        "apply-copy", help="Apply keep/drop actions to a copy; preserve review decisions"
+    )
+    apply_copy.add_argument("--source-db", type=Path, required=True)
+    apply_copy.add_argument("--decision-db", type=Path, required=True)
+    apply_copy.add_argument("--output-db", type=Path, required=True)
+    apply_copy.add_argument("--replace", action="store_true")
+
     args = parser.parse_args()
     if args.command == "classify":
         result = run_classification(
@@ -64,6 +73,11 @@ def main() -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     elif args.command == "build-overlay":
         result = build_overlay(args.decision_db, args.adjudication, args.output)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif args.command == "apply-copy":
+        result = apply_to_copy(
+            args.source_db, args.decision_db, args.output_db, args.replace
+        )
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

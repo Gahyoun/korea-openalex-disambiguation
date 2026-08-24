@@ -80,6 +80,19 @@ koad build-overlay \
 
 1차 `high` 자동 판정은 그대로 적용합니다. 1차 review는 단일 CLI의 `high` 판정 또는 복수 CLI의 다수결이 있을 때만 해소합니다. CLI끼리 충돌하면 review로 남습니다.
 
+## 웹용 DB 복사본 생성
+
+원본을 덮어쓰지 않고 웹 빌드용 복사본에 판정을 적용합니다.
+
+```bash
+koad apply-copy \
+  --source-db /path/to/private.sqlite \
+  --decision-db outputs/run-2026/identity_decisions.sqlite \
+  --output-db outputs/run-2026/private_web.sqlite
+```
+
+`keep`과 `drop`만 반영하고 `review`는 원래 DB 판단을 유지합니다. 바뀐 행은 `koad_application_audit`에 이전·이후 판단과 판정 이유를 저장합니다. `affiliation_periods`에서도 제외 논문 ID를 제거하므로 잘못 집계된 논문 소속이 웹 경력으로 다시 나타나지 않습니다.
+
 ## 테스트
 
 ```bash
