@@ -66,6 +66,8 @@ koad adjudicate \
 
 실제 판정에서는 `--dry-run`을 제거합니다. `--provider`는 `claude`, `gemini`, `antigravity` 중 하나입니다. 이름·ORCID는 외부 CLI에 보내지 않고, 해시 처리된 교수 토큰·논문 메타데이터·판정 증거만 전달합니다.
 
+CLI 옵션은 각 공식 문서를 기준으로 구현했습니다: [Claude Code CLI](https://code.claude.com/docs/en/cli-usage), [Gemini CLI headless mode](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/headless.md), [Antigravity headless mode](https://antigravity.google/docs/cli/headless/).
+
 ## 최종 overlay
 
 ```bash
@@ -87,4 +89,3 @@ python -m unittest discover -s tests -v
 ## 공개 저장소 주의사항
 
 `outputs/`는 `.gitignore`에 포함되어 있습니다. 실명, ORCID, 원본 DB, API 키, 판정 산출물은 커밋하지 마세요. 라이브러리 코드와 합성 테스트만 공개 저장소에 올리는 구성을 권장합니다.
-
