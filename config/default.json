@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "doctoral_window_years": 5,
+  "topic_similarity_keep": 0.18,
+  "topic_similarity_far": 0.07,
+  "graph_topic_similarity": 0.30,
+  "near_duplicate_similarity": 0.72,
+  "graph_max_topic_year_gap": 4,
+  "max_shared_entity_component": 80,
+  "orcid_alone_is_sufficient": false,
+  "auto_drop_confidence": ["high"],
+  "auto_keep_confidence": ["high", "medium"],
+  "review_confidence": ["medium", "low"],
+  "subject_fields": {
+    "physics": ["physics and astronomy", "mathematics", "materials science", "engineering", "earth and planetary sciences", "computer science"],
+    "mathematics": ["mathematics", "computer science", "decision sciences", "physics and astronomy"],
+    "chemistry": ["chemistry", "materials science", "chemical engineering", "physics and astronomy", "biochemistry, genetics and molecular biology"],
+    "biology": ["biochemistry, genetics and molecular biology", "agricultural and biological sciences", "environmental science", "medicine", "neuroscience", "immunology and microbiology", "chemistry"]
+  }
+}
+
