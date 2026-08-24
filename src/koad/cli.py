@@ -20,7 +20,12 @@ def main() -> None:
         "--config", type=Path,
         default=Path(__file__).resolve().parents[2] / "config" / "default.json",
     )
-    classify.add_argument("--professor-uid")
+    identity = classify.add_mutually_exclusive_group()
+    identity.add_argument("--professor-uid")
+    identity.add_argument(
+        "--openalex-id",
+        help="OpenAlex author ID or URL (for example A1234567890)",
+    )
     classify.add_argument("--limit", type=int)
     classify.add_argument(
         "--with-works-only", action="store_true",
@@ -56,7 +61,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "classify":
         result = run_classification(
-            args.db, args.output, args.config, args.professor_uid, args.limit,
+            args.db, args.output, args.config, args.professor_uid, args.openalex_id,
+            args.limit,
             args.with_works_only,
         )
         print(json.dumps(result, ensure_ascii=False, indent=2))

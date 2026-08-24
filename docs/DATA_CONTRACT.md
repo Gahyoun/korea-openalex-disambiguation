@@ -12,6 +12,8 @@
 
 읽기 전용·immutable 모드로 연결하므로 1차 판정은 입력 DB를 변경하지 않습니다.
 
+`koad classify --openalex-id`는 `A123…`, `https://openalex.org/A123…`, `https://openalex.org/authors/A123…` 형식을 모두 받습니다. `professors.openalex_id`에 복수 ID가 함께 적힌 경우에도 각 `A…` 토큰을 분리해 선택합니다.
+
 ## 1차 JSONL 공통 키
 
 - 식별: `professor_uid`, `professor_token`, `work_id`

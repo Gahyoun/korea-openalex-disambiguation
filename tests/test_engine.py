@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from koad.engine import classify_professor
+from koad.engine import (
+    classify_professor, normalize_openalex_author_id, openalex_author_ids,
+)
 from koad.model import Work
 
 
@@ -61,6 +63,19 @@ def work(
 
 
 class IdentityClassifierTests(unittest.TestCase):
+    def test_openalex_id_normalization_accepts_id_and_url(self):
+        self.assertEqual(normalize_openalex_author_id("a1234567890"), "A1234567890")
+        self.assertEqual(
+            normalize_openalex_author_id("https://openalex.org/authors/A1234567890"),
+            "A1234567890",
+        )
+
+    def test_openalex_id_extraction_supports_merged_roster_fields(self):
+        self.assertEqual(
+            openalex_author_ids("A1234567890; https://openalex.org/A9876543210"),
+            {"A1234567890", "A9876543210"},
+        )
+
     def classify(self, works: list[Work], phd_unit: str | None = "kaist", phd_year: int = 2010):
         professor = {
             "professor_uid": "prof:test", "name": "테스트", "subject": "physics",

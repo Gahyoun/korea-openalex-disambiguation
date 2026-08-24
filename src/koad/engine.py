@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 from collections import Counter, defaultdict, deque
 from dataclasses import asdict
@@ -15,6 +16,28 @@ from .model import (
     Decision, Work, anonymized_token, centroid, cosine, semantic_families_for_work,
     stable_json, tfidf_vectors,
 )
+
+
+OPENALEX_AUTHOR_ID_PATTERN = re.compile(r"(?i)\bA\d+\b")
+
+
+def openalex_author_ids(value: str | None) -> set[str]:
+    """Extract normalized OpenAlex author IDs from IDs, URLs, or merged fields."""
+    return {
+        match.group(0).upper()
+        for match in OPENALEX_AUTHOR_ID_PATTERN.finditer(value or "")
+    }
+
+
+def normalize_openalex_author_id(value: str) -> str:
+    """Return one normalized ``A…`` author ID or raise a useful input error."""
+    ids = openalex_author_ids(value)
+    if len(ids) != 1:
+        raise ValueError(
+            "--openalex-id must contain exactly one OpenAlex author ID "
+            "(for example A1234567890 or https://openalex.org/A1234567890)"
+        )
+    return next(iter(ids))
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -594,15 +617,25 @@ def run_classification(
     output_dir: Path,
     config_path: Path,
     professor_uid: str | None = None,
+    openalex_id: str | None = None,
     limit: int | None = None,
     with_works_only: bool = False,
 ) -> dict[str, Any]:
+    if professor_uid and openalex_id:
+        raise ValueError("Use only one of professor_uid and openalex_id")
+    normalized_openalex_id = (
+        normalize_openalex_author_id(openalex_id) if openalex_id else None
+    )
     config = load_json(config_path)
     generated_at = datetime.now(timezone.utc).isoformat()
     manifest = {
         "library_version": __version__, "schema_version": config["schema_version"],
         "generated_at": generated_at, "source_database": str(database_path.resolve()),
         "source_database_sha256": source_fingerprint(database_path), "config": config,
+        "selector": {
+            "professor_uid": professor_uid,
+            "openalex_id": normalized_openalex_id,
+        },
         "privacy": "Outputs are private; Git ignores outputs/. External adjudicators receive anonymized evidence only.",
     }
     writer = OutputWriter(output_dir, manifest)
@@ -619,7 +652,16 @@ def run_classification(
                 "WHERE w.professor_uid=professors.professor_uid)"
             )
         query += " ORDER BY professor_uid"
-        professors = connection.execute(query, params)
+        professors = list(connection.execute(query, params))
+        if normalized_openalex_id:
+            professors = [
+                professor for professor in professors
+                if normalized_openalex_id in openalex_author_ids(professor["openalex_id"])
+            ]
+            if not professors:
+                raise ValueError(
+                    f"OpenAlex author ID {normalized_openalex_id} was not found in professors.openalex_id"
+                )
         for professor_index, professor in enumerate(professors):
             if limit is not None and professor_index >= limit:
                 break

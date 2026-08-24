@@ -34,15 +34,21 @@ koad classify \
   --output outputs/run-2026
 ```
 
-한 교수 또는 논문 근거가 있는 100명 표본:
+특정 OpenAlex 저자 ID, 내부 교수 ID 또는 논문 근거가 있는 100명 표본:
 
 ```bash
+koad classify --db /path/to/input.sqlite --output outputs/by-openalex-id \
+  --openalex-id A1234567890
+
+# URL 형식도 허용합니다: https://openalex.org/A1234567890
 koad classify --db /path/to/input.sqlite --output outputs/one \
-  --professor-uid prof:physics:phy0075
+  --professor-uid prof:physics:example001
 
 koad classify --db /path/to/input.sqlite --output outputs/sample \
   --limit 100 --with-works-only
 ```
+
+`--openalex-id`는 `A…` ID와 OpenAlex URL을 정규화합니다. 명부의 한 셀에 복수 ID가 쉼표·세미콜론 등으로 표기된 경우에도 해당 ID를 찾아 같은 교수 레코드의 연속성 증거를 판정합니다.
 
 결과는 `true_papers.jsonl`, `namesake_papers.jsonl`, `review_queue.jsonl`, `professor_identity_summary.jsonl`, `identity_decisions.sqlite`로 나뉩니다. 설정과 입력 DB SHA-256은 `run_manifest.json`에 기록됩니다.
 
