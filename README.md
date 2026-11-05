@@ -13,6 +13,7 @@
 - 원본 DB를 직접 삭제하지 않습니다. 최종 판단은 감사 가능한 overlay DB로 만듭니다.
 
 자세한 판정식은 [docs/METHODOLOGY.md](docs/METHODOLOGY.md), 입출력 구조는 [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md)를 참고하세요.
+공개 릴리스 단계에서 KOAD 판정 뒤에 적용하는 규칙(경력 일관성 동명이인 제거, 추가 author ID의 기관×시기 회수, 사람의 명시적 결정)은 [docs/RELEASE_RULES.md](docs/RELEASE_RULES.md)와 `src/koad/release_rules.py`에 있습니다.
 
 ## 설치
 
