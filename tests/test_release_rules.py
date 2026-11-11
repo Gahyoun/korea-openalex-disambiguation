@@ -1,7 +1,7 @@
 import unittest
 from collections import Counter
 
-from koad.release_rules import (accept_candidate, allowed_fields, career_consistency, name_matches,
+from koad.release_rules import (accept_candidate, allowed_fields, career_consistency, corroborated, name_matches,
                                 name_signatures, norm_institution)
 
 CAREER = ["Korea Advanced Institute of Science and Technology", "Umeå University",
@@ -71,6 +71,28 @@ class CandidateTests(unittest.TestCase):
         self.assertFalse(accept_candidate({**w, "publication_year": 2023}, a, segs, ok, sigs))
         self.assertFalse(accept_candidate(w, {**a, "raw_author_name": "Min Ji Lee"}, segs, ok, sigs))
         self.assertFalse(accept_candidate({**w, "primary_topic": {"field": {"display_name": "Medicine"}}}, a, segs, ok, sigs))
+
+
+class CorroborationTests(unittest.TestCase):
+    """A statistical physicist's ID also held a food scientist's papers, one sharing a coauthor ID."""
+
+    def test_identity_and_subject_both_required(self):
+        segs = [("Sungkyunkwan University", 2011, 2016), ("Max Planck Institute for Evolutionary Biology", 2017, 2021),
+                ("Inha University", 2022, 2026)]
+        sp = dict(subfield="Statistical and Nonlinear Physics", domain="Physical Sciences")
+        food = dict(subfield="Food Science", domain="Life Sciences")
+        works = [
+            dict(id="W1", year=2014, institutions=["Sungkyunkwan University"], coauthors=["A-kim"], **sp),
+            dict(id="W2", year=2019, institutions=["Max Planck Institute for Evolutionary Biology"], coauthors=["A-t"],
+                 subfield="Genetics", domain="Life Sciences"),
+            dict(id="W3", year=2024, institutions=["Inha University"], coauthors=["A-kim"], **sp),
+            dict(id="W4", year=2020, institutions=[], coauthors=["A-t"], subfield="Genetics", domain="Life Sciences"),
+            dict(id="W5", year=2013, institutions=[], coauthors=[], **food),
+            dict(id="W6", year=2015, institutions=[], coauthors=["A-kim"], **food),
+            dict(id="W7", year=2016, institutions=[], coauthors=[], subfield="Pollution", domain="Physical Sciences"),
+        ]
+        self.assertEqual(corroborated(works, segs, "physics"),
+                         {"W5": "uncorroborated", "W6": "uncorroborated", "W7": "uncorroborated"})
 
 
 if __name__ == "__main__":
