@@ -95,5 +95,50 @@ class CorroborationTests(unittest.TestCase):
                          {"W5": "uncorroborated", "W6": "uncorroborated", "W7": "uncorroborated"})
 
 
+class CareerConflictTests(unittest.TestCase):
+    """During the PhD at one university, a paper from another university under the same name is a
+    namesake's; co-located institutes, the same institution family, moves and real collaborations
+    are not."""
+
+    def test_conflict(self):
+        from koad.release_rules import career_conflict
+        career = [dict(stage='doctoral', institution='Sungkyunkwan University', start_year=2011, end_year=2016, is_estimated=True),
+                  dict(stage='postdoc', institution='Max Planck Institute for Evolutionary Biology', start_year=2017, end_year=2021),
+                  dict(stage='faculty', institution='Inha University', start_year=2022, end_year=2026)]
+        meta = {'I-skku': {'type': 'education', 'lineage': ['I-skku']}, 'I-inha': {'type': 'education', 'lineage': ['I-inha']},
+                'I-cbnu': {'type': 'education', 'lineage': ['I-cbnu']}, 'I-pnu': {'type': 'education', 'lineage': ['I-pnu']},
+                'I-ibs': {'type': 'facility', 'lineage': ['I-ibs']}, 'I-skkumed': {'type': 'healthcare', 'lineage': ['I-skkumed', 'I-skku']},
+                'I-hosp': {'type': 'healthcare', 'lineage': ['I-hosp']}}
+        sp = 'Statistical and Nonlinear Physics'
+
+        def w(i, y, inst, iid, co=(), sub=sp):
+            return dict(id=i, year=y, institutions=[inst], institution_ids=[iid], coauthors=list(co), subfield=sub)
+        works = [w('A1', 2013, 'Sungkyunkwan University', 'I-skku', ['A-kim', 'A-lee']),
+                 w('A2', 2014, 'Sungkyunkwan University', 'I-skku', ['A-kim']),
+                 w('A3', 2023, 'Inha University', 'I-inha', ['A-kim', 'A-son']),
+                 w('N1', 2015, 'Chungbuk National University', 'I-cbnu', [], 'Food Science'),   # PhD years, other university
+                 w('K10', 2014, 'Pusan National University', 'I-pnu', ['A-x']),                # PhD years, same subfield
+                 w('N2', 2024, 'Pusan National University', 'I-pnu', ['A-x']),                 # faculty years, no shared coauthor
+                 w('N3', 2014, 'Samsung Hospital', 'I-hosp', ['A-kim'], 'Oncology'),           # one shared, other subfield
+                 w('K1', 2014, 'Institute for Basic Science', 'I-ibs'),                          # co-located institute
+                 w('K2', 2014, 'Sungkyunkwan University School of Medicine', 'I-skkumed'),      # same lineage
+                 w('K3', 2016, 'Pusan National University', 'I-pnu'),                           # boundary year (PhD end)
+                 w('K7', 2012, 'Pusan National University', 'I-pnu'),                           # 2nd year of the PhD
+                 w('K8', 2023, 'Pusan National University', 'I-pnu'),                           # 2nd faculty year (publication lag)
+                 w('K9', 2025, 'Pusan National University', 'I-pnu'),                           # year before a faculty move
+                 w('K4', 2014, 'Pusan National University', 'I-pnu', ['A-kim', 'A-lee']),      # two shared coauthors
+                 w('K5', 2019, 'Pusan National University', 'I-pnu'),                           # postdoc years: not whereabouts
+                 w('K6', 2014, 'Pusan National University', 'I-pnu', ['A-kim'])]               # one shared, same subfield
+        self.assertEqual(career_conflict(works, career, 'physics', meta),
+                         {'N1': 'career_conflict', 'N2': 'career_conflict', 'N3': 'career_conflict'})
+
+    def test_core_names(self):
+        from koad.release_rules import same_institution
+        self.assertTrue(same_institution('New York at Stony Brook', 'Stony Brook University'))
+        self.assertTrue(same_institution('Stanford Medicine', 'Stanford University'))
+        self.assertFalse(same_institution('Seoul National University', 'University of Seoul'))
+        self.assertFalse(same_institution('Kunsan National University', 'Ulsan National Institute of Science and Technology'))
+
+
 if __name__ == "__main__":
     unittest.main()
