@@ -7,7 +7,8 @@ full rebuild and the patched release agree.
 
 1. career_consistency()  drop namesake works that survived KOAD
 2. accept_candidate()    add missing works from extra OpenAlex author IDs (institution x period)
-3. Explicit decisions    verified_works / rejected_works / explicit keep (data formats in the doc)
+3. Explicit decisions    verified_works / rejected_works / explicit keep / require_corroboration
+                         (corroborated(): data formats in the doc)
 """
 from __future__ import annotations
 
@@ -118,3 +119,32 @@ def accept_candidate(work, authorship, career_segments, fields_ok, published_sig
     field = ((work.get("primary_topic") or {}).get("field") or {}).get("display_name")
     raw = authorship.get("raw_author_name") or (authorship.get("author") or {}).get("display_name")
     return bool(anchored and field in fields_ok and work.get("type") in types and name_matches(raw, published_signatures))
+
+
+# --------------------------------------------------------------------------- rule 3: require_corroboration
+def corroborated(works, career_segments, subject=None):
+    """Explicit decision 'require_corroboration', for a researcher whose author ID is known to
+    hold a namesake. Every work needs two mutually supporting affirmations:
+      identity  the authorship institution is a career institution within that segment +-1 year,
+                or the work shares a coauthor ID with the career-anchored works;
+      subject   the work's subfield appears among the anchored works, or its domain is a home
+                domain of the subject.
+    Either alone is not enough (common-name coauthor IDs merge too; a namesake can work nearby).
+    works: [{'id', 'year', 'institutions', 'coauthors', 'subfield', 'domain'}];
+    career_segments: [(institution, start_year, end_year)]. Returns {work_id: 'uncorroborated'}."""
+    segs = [(norm_institution(n), s, e) for n, s, e in career_segments if n and s]
+    home = HOME_DOMAINS.get(subject, set())
+
+    def anchored(w):
+        y = w.get("year") or 0
+        return any(norm_institution(i) == n and s - 1 <= y <= (e or 9999) + 1
+                   for i in w.get("institutions") or [] for n, s, e in segs)
+    anchors = [w for w in works if anchored(w)]
+    subfields = {w.get("subfield") for w in anchors if w.get("subfield")}
+    out = {}
+    for w in works:
+        co = {c for c in w.get("coauthors") or [] if c}
+        others = {c for a in anchors if a is not w for c in a.get("coauthors") or [] if c}
+        if not ((anchored(w) or co & others) and (w.get("subfield") in subfields or w.get("domain") in home)):
+            out[w["id"]] = "uncorroborated"
+    return out
