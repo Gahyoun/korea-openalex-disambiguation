@@ -6,6 +6,8 @@ dashboard repository (backend/scripts/career_consistency.py and the patch tools)
 full rebuild and the patched release agree.
 
 1. career_consistency()  drop namesake works that survived KOAD
+   career_conflict()     drop works that contradict the career (another university/hospital
+                         while the career places the researcher elsewhere)
 2. accept_candidate()    add missing works from extra OpenAlex author IDs (institution x period)
 3. Explicit decisions    verified_works / rejected_works / explicit keep / require_corroboration
                          (corroborated(): data formats in the doc)
@@ -147,4 +149,99 @@ def corroborated(works, career_segments, subject=None):
         others = {c for a in anchors if a is not w for c in a.get("coauthors") or [] if c}
         if not ((anchored(w) or co & others) and (w.get("subfield") in subfields or w.get("domain") in home)):
             out[w["id"]] = "uncorroborated"
+    return out
+
+
+# --------------------------------------------------------------------------- rule 1b: career conflict
+CONFLICT_TYPES = {'education', 'healthcare'}
+GENERIC = re.compile(r'\b(the|of|at|and|for|in|de|du|la|university|universit\w*|college|institute|institut|school|faculty|'
+                     r'medicine|medical|center|centre|hospital|national|state|campus|science|sciences|technology|research|'
+                     r'graduate|main|seoul|korea|new|york)\b')
+
+
+def core_name(name):
+    """Distinctive part of an institution name: 'State University of New York at Stony Brook' -> 'stonybrook'."""
+    s = unicodedata.normalize('NFKD', name or '').encode('ascii', 'ignore').decode().lower()
+    s = re.sub(r'\(.*?\)', ' ', s)
+    return re.sub(r'[^a-z0-9]+', '', GENERIC.sub(' ', re.sub(r'[^a-z0-9 ]+', ' ', s)))
+
+
+def same_institution(a, b):
+    """Same name, or one distinctive core (>= 4 letters) contained in the other. Used only to
+    KEEP works, so a loose match errs on the safe side."""
+    if norm_institution(a) == norm_institution(b):
+        return True
+    x, y = core_name(a), core_name(b)
+    return len(x) >= 4 and len(y) >= 4 and (x in y or y in x)
+WHEREABOUTS = {'doctoral', 'faculty'}
+
+
+def career_conflict(works, career, subject=None, inst_meta=None, min_anchors=MIN_ANCHORS):
+    """A contradicting affirmation from the career: while the researcher is known to be at an
+    institution (a doctoral or faculty segment), a published work whose authorship names only
+    OTHER universities or hospitals is a namesake's (e.g. a physicist's PhD years at one
+    university and a food-science paper from another university under the same name).
+    works: [{'id', 'year', 'institutions': [names], 'institution_ids': [I…], 'coauthors', 'subfield'}]
+    career: [{'stage', 'institution', 'start_year', 'end_year'}] (public career segments)
+    inst_meta: {I…: {'type', 'lineage': [I…]}} from OpenAlex institutions.
+    A work is dropped ('career_conflict') when ALL hold:
+      * the researcher has >= min_anchors works whose authorship names a career institution;
+      * its authorship lists institutions, none of them a career institution or in the same
+        OpenAlex lineage as an institution of the anchored works (Stanford Medicine ~ Stanford
+        University), and all of them are universities or hospitals (research institutes such as
+        IBS or Inserm host students and faculty, so they never contradict);
+      * its year lies inside a doctoral or faculty segment and is not one of the years that can
+        carry the previous or next institution: any segment's first two years (publication lag) and
+        last year, and the year before a faculty segment ends;
+      * in a doctoral (not faculty) period, its subfield is also absent from the anchored works
+        (doctoral years are estimated and doctoral institution names are often abbreviated);
+      * it shares no coauthor ID with the anchored works, or exactly one while its subfield is
+        absent from them (two shared coauthors mean a real collaboration or a visit)."""
+    meta = inst_meta or {}
+    names = {norm_institution(c['institution']) for c in career if c.get('institution')} - {''}
+    anchors = [w for w in works if {norm_institution(i) for i in w.get('institutions') or []} & names]
+    if len(anchors) < min_anchors:
+        return {}
+    family = set()
+    for w in anchors:
+        for iid, name in zip(w.get('institution_ids') or [], w.get('institutions') or []):
+            if iid and norm_institution(name) in names:
+                family |= {iid, *(meta.get(iid, {}).get('lineage') or [])}
+    segs = [(c.get('start_year'), c.get('end_year'), c.get('stage')) for c in career
+            if c.get('stage') in WHEREABOUTS and c.get('start_year')]
+    # years that can carry the previous or next institution: a segment's first two years (work done
+    # before arriving is published after it; an estimated doctoral start may still be a master's
+    # elsewhere) and its last year, plus the year before a faculty move
+    bounds = set()
+    for c in career:
+        s0, e0 = c.get('start_year'), c.get('end_year')
+        if s0:
+            bounds |= {s0, s0 + 1}
+        if e0:
+            bounds |= {e0} | ({e0 - 1} if c.get('stage') == 'faculty' else set())
+    aco = {c for w in anchors for c in w.get('coauthors') or [] if c}
+    asub = {w.get('subfield') for w in anchors if w.get('subfield')}
+    out = {}
+    for w in works:
+        insts = [norm_institution(i) for i in w.get('institutions') or []]
+        iids = [i for i in w.get('institution_ids') or [] if i]
+        y = w.get('year') or 0
+        if not insts or set(insts) & names or not iids:
+            continue
+        if any(same_institution(i, c['institution']) for i in w.get('institutions') or [] for c in career if c.get('institution')):
+            continue
+        if any(i in family or set(meta.get(i, {}).get('lineage') or []) & family for i in iids):
+            continue
+        if not all(meta.get(i, {}).get('type') in CONFLICT_TYPES for i in iids):
+            continue
+        stages = {st for s, e, st in segs if s <= y <= (e or 9999)}
+        if not stages or y in bounds:
+            continue
+        # doctoral years are estimated and doctoral institution names are often abbreviated, so a
+        # doctoral-period conflict also needs a subfield the anchored works never show
+        if 'faculty' not in stages and w.get('subfield') in asub:
+            continue
+        shared = len({c for c in w.get('coauthors') or [] if c} & aco)
+        if shared == 0 or (shared == 1 and w.get('subfield') not in asub):
+            out[w['id']] = 'career_conflict'
     return out
